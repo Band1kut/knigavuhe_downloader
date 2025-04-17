@@ -180,7 +180,7 @@ EndProcedure
 Procedure path_button()
   Protected defaultPath$, path$
   defaultPath$ = GetEnvironmentVariable("USERPROFILE") + "\Music\"  
-  path$ = PathRequester("Выберите папку с историей раздач", defaultPath$)
+  path$ = PathRequester("Выберите папку для схранения", defaultPath$)
   
   If path$ 
     SetGadgetText(#npt_path, path$)
