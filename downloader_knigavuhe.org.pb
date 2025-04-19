@@ -210,23 +210,18 @@ Procedure.s ConvertBytes(bytes)
   ProcedureReturn result
 EndProcedure
 
-Procedure.q GetContentLength(Url$)
-  Protected FileSizet.s=Space(20),FileSize.q, Size,hINET,hURL  
-  hINET=InternetOpen_("PureBasic",0,0,0,0)  
-  If hINET  
-    hURL =InternetOpenUrl_(hINET,Url$,0,0,$80000000,0)  
-    If hURL  
-      Size=Len(FileSizet)  
-      HttpQueryInfo_(hURL,#HTTP_QUERY_CONTENT_LENGTH,@FileSizet,@Size,#Null)  
-      FileSize=Val(FileSizet)  
-      InternetCloseHandle_(hURL)  
-      InternetCloseHandle_(hINET)  
-    Else 
-      InternetCloseHandle_(hINET)  
-    EndIf  
-  EndIf  
-  ProcedureReturn FileSize  
-EndProcedure 
+Procedure GetContentLength(url$)
+  Protected file_size, Header$
+  HttpRequest = HTTPRequest(#PB_HTTP_Get, url$, "", #PB_HTTP_HeadersOnly)
+  If HttpRequest
+    Header$ = HTTPInfo(HTTPRequest, #PB_HTTP_Headers)
+    Header$ = StringField(Header$, 2, "Content-Length:")
+    file_size = Val(StringField(Header$, 1, #LF$))
+    FinishHTTP(HTTPRequest)
+  EndIf 
+  
+  ProcedureReturn file_size
+EndProcedure
 
 Procedure.s downFile(url$, name_file$, size_file=0)
   Protected content_length, Download, Progress, result$
@@ -255,7 +250,7 @@ Procedure.s downFile(url$, name_file$, size_file=0)
         Default
           If size_file
             SetGadgetText(#tracker, ConvertBytes(Progress)+ "/" +ConvertBytes(size_file))
-            SetGadgetState(#progress_bar, Int(Progress/content_length*100))            
+            SetGadgetState(#progress_bar, Int(Progress/size_file*100))            
           EndIf 
           
       EndSelect
@@ -569,8 +564,8 @@ End
 
   
 ; IDE Options = PureBasic 6.10 LTS (Windows - x64)
-; CursorPosition = 535
-; FirstLine = 504
+; CursorPosition = 252
+; FirstLine = 225
 ; Folding = ----
 ; Optimizer
 ; EnableThread
