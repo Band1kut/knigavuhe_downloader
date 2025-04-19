@@ -49,7 +49,7 @@ Structure page
   html.s
 EndStructure
 
-Global mainStruct.main, stop.b, downloading.b
+Global mainStruct.main, stop.b
 
 Procedure updateDecription(path$, text$)
   If OpenFile(0, path$)
@@ -496,7 +496,9 @@ Procedure download_book()
   If Len(error$) <> 0
     MessageRequester("Ошибка", error$, #PB_MessageRequester_Error)
   Else
-    MessageRequester("Done!", "Загрузка завершена", #PB_MessageRequester_Info)
+    If #PB_MessageRequester_Yes = MessageRequester("Done!", ~"Загрузка успешно завершена\nОткрыть папку с книгой?", #PB_MessageRequester_Info|#PB_MessageRequester_YesNo )
+      RunProgram("explorer.exe", path$, "")
+    EndIf
   EndIf
   
 EndProcedure
@@ -532,6 +534,7 @@ Procedure Openmain_window(x = 0, y = 0, width = 504, height = 272)
   ButtonGadget(#btn_down, 408, 160, 80, 28, "Скачать")
   
   SetGadgetText(#npt_path, GetEnvironmentVariable("USERPROFILE") + "\Music\")
+  
 EndProcedure
 
 Openmain_window()
@@ -566,8 +569,8 @@ End
 
   
 ; IDE Options = PureBasic 6.10 LTS (Windows - x64)
-; CursorPosition = 453
-; FirstLine = 428
+; CursorPosition = 535
+; FirstLine = 504
 ; Folding = ----
 ; Optimizer
 ; EnableThread
