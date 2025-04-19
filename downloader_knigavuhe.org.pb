@@ -1,4 +1,4 @@
-﻿Enumeration FormWindow
+Enumeration FormWindow
   #main_window
 EndEnumeration
 
@@ -42,12 +42,17 @@ Structure main
   id.i
   book.book
   List playlist.audio()
+  List merged_playlist.audio()
+EndStructure
+
+Structure page
+  html.s
 EndStructure
 
 Global mainStruct.main, stop.b, downloading.b
 
 Procedure updateDecription(path$, text$)
-  If OpenFile(0, path$ + "Description.txt")
+  If OpenFile(0, path$)
     FileSeek(0, Lof(0))
     WriteStringN(0, text$)
     CloseFile(0)
@@ -56,7 +61,7 @@ EndProcedure
 
 Procedure.s findRegExpOne(text$, exp$, *err.err)
   Protected result$, re
-  re = CreateRegularExpression(#PB_Any, exp$)
+  re = CreateRegularExpression(#PB_Any, exp$, #PB_RegularExpression_DotAll)
   If re
     If ExamineRegularExpression(re, text$)
       NextRegularExpressionMatch(re)
@@ -140,10 +145,10 @@ Procedure.s getAuthors(Map tMap.names())
     ProcedureReturn authors$
 EndProcedure
 
-Procedure.s processPage(html$, *err.err)
+Procedure.s processPage(*page.page, *err.err)
   ;   Debug GetGadgetText(#npt_url)
   Protected json$, author$, reader$
-  json$ = findRegExpOne(html$, "BookController\.enter\((.*?\})\);", *err)
+  json$ = findRegExpOne(*page\html, "BookController\.enter\((.*?\})\);", *err)
   
   If json$
     If Not prepareJSON(json$)
@@ -223,9 +228,8 @@ Procedure.q GetContentLength(Url$)
   ProcedureReturn FileSize  
 EndProcedure 
 
-Procedure.s downFile(url$, name_file$, progressbarID=0)
+Procedure.s downFile(url$, name_file$, size_file=0)
   Protected content_length, Download, Progress, result$
-  content_length = GetContentLength(url$)
   
   Download = ReceiveHTTPFile(url$, name_file$, #PB_HTTP_Asynchronous)
   If Download
@@ -249,8 +253,8 @@ Procedure.s downFile(url$, name_file$, progressbarID=0)
           Break
           
         Default
-          If progressbarID
-            SetGadgetText(#tracker, ConvertBytes(Progress)+ "/" +ConvertBytes(content_length))
+          If size_file
+            SetGadgetText(#tracker, ConvertBytes(Progress)+ "/" +ConvertBytes(size_file))
             SetGadgetState(#progress_bar, Int(Progress/content_length*100))            
           EndIf 
           
@@ -263,30 +267,106 @@ Procedure.s downFile(url$, name_file$, progressbarID=0)
     result$ = "Ошибка загрузки"
   EndIf
   
-  SetGadgetText(#tracker, ConvertBytes(content_length)+ "/" +ConvertBytes(content_length))
-  SetGadgetState(#progress_bar, 0)
+  If size_file
+    SetGadgetText(#tracker, ConvertBytes(size_file)+ "/" +ConvertBytes(size_file))
+    SetGadgetState(#progress_bar, 0)
+  EndIf
   ProcedureReturn result$
 EndProcedure
 
-Procedure.s downPlaylist(path$)
-  Protected name_file$, path_file$, count, total$, error$
-  total$ = Str(ListSize(mainStruct\playlist()))
-  count = 1
+Procedure delFilesByExt(path$, ext$)
+  If ExamineDirectory(0, path$, ext$)
+    While NextDirectoryEntry(0)
+      If DirectoryEntryType(0) = #PB_DirectoryEntry_File
+        file$ = path$ + DirectoryEntryName(0)
+        If Not DeleteFile(file$)
+          RenameFile(file$, file$+".delete")
+        EndIf
+      EndIf
+    Wend
+    FinishDirectory(0)
+  Else
+    MessageRequester("Ошибка", "Не удалось открыть папку: " + directory$)
+  EndIf
+EndProcedure
+
+Procedure.b fileExists(path$, name_file$, size_file=0)
+  Protected result.b
+  If ExamineDirectory(0, path$, name_file$)
+    If NextDirectoryEntry(0)
+      
+      If Not size_file
+        result = #True
+      ElseIf DirectoryEntryType(0) = #PB_DirectoryEntry_File  
+        If size_file = DirectoryEntrySize(0)
+          result = #True
+        EndIf
+      EndIf
+      
+    EndIf 
+    FinishDirectory(0)
+  Else
+    MessageRequester("Ошибка", "Не удалось открыть папку: " + directory$)
+  EndIf
+  ProcedureReturn result
+EndProcedure
+
+Procedure.s iterPlaylist(path$, List pl.audio())
+  Protected name_file$, path_file$, count, total$, error$, ext$, size_file
+  total$ = Str(ListSize(pl()))
   
-  ResetList(mainStruct\playlist())
-  ForEach mainStruct\playlist()
-    SetGadgetText(#src_info, Str(count) + "/" + total$ + " " + mainStruct\playlist()\title)
-    name_file$ = getPartString(mainStruct\playlist()\url, "/", -1)
-    path_file$ = path$ + name_file$
+  ResetList(pl())
+  ForEach pl()
+    count +1
+    SetGadgetText(#src_info, Str(count) + "/" + total$ + " " + pl()\title)
     
-    error$ = downFile(mainStruct\playlist()\url, path_file$, 1)
+    pl()\url = getPartString(pl()\url, "?", 1)
+    ext$ = "."+getPartString(pl()\url, ".", -1)
+    name_file$ = pl()\title + ext$
+    
+    If count = 1
+      name_file$ = "."+mainStruct\book\name + ext$
+    EndIf 
+    
+    path_file$ = path$ + name_file$
+    size_file = GetContentLength(pl()\url)
+    
+    If fileExists(path$, name_file$, size_file)
+      SetGadgetText(#tracker, "Уже скачан")
+      Delay(700)
+      Continue
+    EndIf 
+    
+    error$ = downFile(pl()\url, path_file$, size_file)
     If Len(error$ ) <> 0
       error$ + ~"\n" + "Скачано " + Str(count-1) + " аудиофайлов из " + total$
       Break
     EndIf 
-    updateDecription(path$, name_file$)
-    count +1
+;     updateDecription(path$, name_file$)
+    
   Next
+  ProcedureReturn error$
+EndProcedure
+
+Procedure.s downPlaylist(path$)
+  Protected error$
+  
+  error$ = iterPlaylist(path$, mainStruct\playlist())
+  If Len(error$) = 0 Or stop
+    ProcedureReturn error$
+  EndIf 
+  
+  error$ + ~"\n\n Загрузка нечнется заново из альтернативного источника"
+  MessageRequester("Ошибка", error$, #PB_MessageRequester_Error)
+  
+  delFilesByExt(path$, "*.mp3")
+  
+  error$ = iterPlaylist(path$, mainStruct\merged_playlist())
+  
+  If Len(error$) <> 0
+    error$ + ~"\n\n Загрузка невозможна из обоих источников :("
+  EndIf 
+  
   ProcedureReturn error$
 EndProcedure
 
@@ -334,20 +414,29 @@ Procedure.s checkURL(url$, *err.err)
   ProcedureReturn url$
 EndProcedure
 
-Procedure.s getDescription(html$, *err.err)
-  Protected text$, descripton$
-  text$ = "URL: " + GetGadgetText(#npt_url) + ~"\n\n"
-  text$ + "Название: " + mainStruct\book\name + ~"\n"
+Procedure.s parseDescription(*page.page)
+  Protected s$ = findRegExpOne(*page\html, ~"bookDescription\">(.+?)" + "<\/div>", *err.err)
+  If CreateRegularExpression(0, "<.*?>")
+    s$ = ReplaceRegularExpression(0, s$, "")
+  EndIf 
+  ProcedureReturn s$
+EndProcedure
+
+Procedure.s getDescription(*page.page, *err.err)
+  Protected text$, descripton$  
+  text$ = "Название: " + mainStruct\book\name + ~"\n"
   text$ + GetGadgetText(#lbl_authors) + " " + GetGadgetText(#src_authors) + ~"\n"
   text$ + GetGadgetText(#lbl_readers) + " " + GetGadgetText(#src_readers) + ~"\n\nОписание:\n"
   
-  text$ + findRegExpOne(html$, ~"bookDescription\">(.*?)</", *err.err)  + ~"\n\nСписок файлов:"
+  text$ + parseDescription(*page);~"bookDescription\">(.*?)</div>"
+  
+  text$ + ~"\n\n" + GetGadgetText(#npt_url)
   ProcedureReturn text$
 EndProcedure
 
 
 Procedure download_book()
-  Protected html$, path$, url$, error$, err.err
+  Protected page.page, path$, url$,  error$, err.err
   
   url$ = GetGadgetText(#npt_url)
   url$ = checkURL(url$, @err)
@@ -362,14 +451,15 @@ Procedure download_book()
     ProcedureReturn 
   EndIf 
   
+  SetGadgetText(#src_info, "Загрузка страницы")
   
-  html$ = downloadPage(url$, @err)
+  page\html = downloadPage(url$, @err)
   If err\isErr
-    MessageRequester("Ошибка", ~"Не удалось скачать страницу:\n" + html$, #PB_MessageRequester_Error)
+    MessageRequester("Ошибка", ~"Не удалось скачать страницу:\n" + url$, #PB_MessageRequester_Error)
     ProcedureReturn 
   EndIf 
   
-  result$ = processPage(html$, @err)
+  result$ = processPage(@page, @err)
   If err\isErr
     MessageRequester("Ошибка", ~"Не удалось обработать страницу:\n" + result$, #PB_MessageRequester_Error)
     ProcedureReturn 
@@ -378,17 +468,25 @@ Procedure download_book()
   path$ = prepareDir()
   
   
-  
-  url$ = mainStruct\book\cover
-  error$ = downFile(url$, path$+"cover.jpg")
-  If error$ <> ""
-    MessageRequester("Предупреждение", ~"Не удалось загрузить обложку: \n" + error$, #PB_MessageRequester_Warning)
+  If Not fileExists(path$, "cover.jpg")
+    SetGadgetText(#src_info, "Загрузка обложки")
+    error$ = downFile(mainStruct\book\cover, path$+"cover.jpg")
+    If error$ <> ""
+      MessageRequester("Предупреждение", ~"Не удалось загрузить обложку: \n" + error$, #PB_MessageRequester_Warning)
+    EndIf 
+    SetGadgetText(#tracker, "Готово")
   EndIf 
   
   SetGadgetText(#btn_down, "Прервать")
   
-  descripton$ = getDescription(html$, @err)
-  updateDecription(path$, descripton$)
+  If Not fileExists(path$, "Description.txt")
+    SetGadgetText(#src_info, "Создание файла описания")
+    descripton$ = getDescription(@page, @err)
+    updateDecription(path$+"Description.txt", descripton$)
+    SetGadgetText(#tracker, "Готово")
+  EndIf 
+  
+  ClearStructure(@page, page)
   
   error$ = downPlaylist(path$)
   SetGadgetText(#tracker, "")
@@ -468,8 +566,8 @@ End
 
   
 ; IDE Options = PureBasic 6.10 LTS (Windows - x64)
-; CursorPosition = 191
-; FirstLine = 179
+; CursorPosition = 453
+; FirstLine = 428
 ; Folding = ----
 ; Optimizer
 ; EnableThread
