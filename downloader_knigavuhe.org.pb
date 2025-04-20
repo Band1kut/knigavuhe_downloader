@@ -49,7 +49,7 @@ Structure page
   html.s
 EndStructure
 
-Global mainStruct.main, stop.b
+Global mainStruct.main, stop.b, downloading
 
 Procedure updateDecription(path$, text$)
   If OpenFile(0, path$)
@@ -564,8 +564,8 @@ End
 
   
 ; IDE Options = PureBasic 6.10 LTS (Windows - x64)
-; CursorPosition = 252
-; FirstLine = 225
+; CursorPosition = 51
+; FirstLine = 30
 ; Folding = ----
 ; Optimizer
 ; EnableThread
