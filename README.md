@@ -1,4 +1,5 @@
-![image](https://github.com/user-attachments/assets/2b12a85a-2f3d-4df2-b885-b38f3acc6c39)
+![image](https://github.com/user-attachments/assets/d1c81b5c-f613-4891-b3e4-42a958966745)
+
 
 
 # Knigavuhe.org Downloader
